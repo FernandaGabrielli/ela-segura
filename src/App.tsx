@@ -16,7 +16,6 @@ import EmergencyContacts from "./pages/EmergencyContacts";
 import MyReports from "./pages/MyReports";
 import Menu from "./pages/Menu";
 
-<<<<<<< HEAD
 /* NOVAS TELAS */
 import MapScreen from "./pages/MapScreen";
 import CheckinScreen from "./pages/CheckinScreen";
@@ -24,9 +23,6 @@ import EmergencyScreen from "./pages/EmergencyScreen";
 import CheckinConfirmed from "./pages/CheckinConfirmed";
 
 /* TODAS AS TELAS */
-=======
-// Adicionamos todos os nomes das novas telas ao tipo
->>>>>>> 8c86ec9162b098b04a6c18b5b6916993d3ebc785
 type Screen =
   | "start"
   | "login"
@@ -40,7 +36,6 @@ type Screen =
   | "report"
   | "contacts"
   | "my_reports"
-<<<<<<< HEAD
   | "menu"
 
   /* NOVAS */
@@ -286,101 +281,6 @@ export default function App() {
             setScreen("checkin")
           }
         />
-=======
-  | "menu";
-
-export default function App() {
-  const [screen, setScreen] = useState<Screen>("start");
-
-  return (
-    <div className="min-h-screen bg-white">
-      {/* Fluxo Principal */}
-      {screen === "start" && (
-        <Start onLogin={() => setScreen("login")} onRegister={() => setScreen("register")} />
-      )}
-
-      {screen === "login" && (
-        <Login
-        onBack={() => setScreen("start")}
-        onGoToRegister={() => setScreen("register")}
-        onForgotPassword={() => setScreen("forgot_password")}
-        onLogin={() => setScreen("profile")}
-        />
-      )}
-      {screen === "profile" && (
-        <Profile
-            onBack={() => setScreen("login")}
-            onMenu={() => setScreen("menu")}
-        />
-        )}
-
-        {screen === "report" && (
-        <ReportIncident
-            onBack={() => setScreen("menu")}
-            onNext={() => setScreen("my_reports")}
-        />
-        )}
-
-        {screen === "contacts" && (
-        <EmergencyContacts
-            onBack={() => setScreen("menu")}
-        />
-        )}
-
-        {screen === "my_reports" && (
-        <MyReports
-            onBack={() => setScreen("menu")}
-            onNewReport={() => setScreen("report")}
-        />
-        )}
-
-        {screen === "menu" && (
-        <Menu
-            onClose={() => setScreen("profile")}
-            onProfile={() => setScreen("profile")}
-            onReport={() => setScreen("report")}
-            onContacts={() => setScreen("contacts")}
-            onReports={() => setScreen("my_reports")}
-            onLogout={() => setScreen("login")}
-        />
-        )}
-
-      {screen === "register" && (
-        <Register onBack={() => setScreen("start")} onGoToLogin={() => setScreen("login")} />
-      )}
-
-      {/* Fluxo de Recuperação de Senha */}
-      {screen === "forgot_password" && (
-        <ForgotPassword 
-          onBack={() => setScreen("login")} 
-          onNext={() => setScreen("verify_code")} 
-        />
-      )}
-
-      {screen === "verify_code" && (
-        <VerifyCode 
-          onBack={() => setScreen("forgot_password")} 
-          onNext={() => setScreen("password_success")} 
-        />
-      )}
-
-      {screen === "password_success" && (
-        <PasswordSuccess 
-          onBack={() => setScreen("verify_code")} 
-          onNext={() => setScreen("new_password")} 
-        />
-      )}
-
-      {screen === "new_password" && (
-        <NewPassword 
-          onBack={() => setScreen("password_success")} 
-          onNext={() => setScreen("success_reset")} 
-        />
-      )}
-
-      {screen === "success_reset" && (
-        <SuccessReset onContinue={() => setScreen("login")} />
->>>>>>> 8c86ec9162b098b04a6c18b5b6916993d3ebc785
       )}
     </div>
   );
