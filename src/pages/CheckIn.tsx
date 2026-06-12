@@ -1,39 +1,125 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Check, MapPin, Clock3, Users, Navigation } from "lucide-react";
 import BottomTab from "../components/Bottomtab";
 
 interface CheckInProps {
   onBack: () => void;
-  onConfirm: () => void;
+  onConfirm: (payload: { destino: string; tempo: string; contatos: string[]; lat?: number; lng?: number }) => void;
   onEmergency: () => void;
 }
 
-export default function CheckIn({ onBack, onConfirm, onEmergency }: CheckInProps) {
-  // 1. Estados dinâmicos para os campos preenchíveis
-  const [destination, setDestination] = useState("");
-  const [selectedTime, setSelectedType] = useState("1 hora");
-  const [selectedContacts, setSelectedContacts] = useState<number[]>([2]); // João (ID 2) começa selecionado
+interface ContatoData {
+  id: string;
+  nome: string;
+  telefone: string;
+}
 
-  // Lista fixa de contatos para simulação
-  const contactList = [
-    { id: 1, name: "Mãe", phone: "(81) 9 8888-7777" },
-    { id: 2, name: "João", phone: "(81) 9 1234-6789" },
-  ];
+export default function CheckIn({ onBack, onConfirm, onEmergency }: CheckInProps) {
+  const [destination, setDestination] = useState("");
+  const [selectedTime, setSelectedTime] = useState("1 hora");
+  const [contactList, setContactList] = useState<ContatoData[]>([]);
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [coords, setCoords] = useState<{ lat?: number; lng?: number }>({});
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [sendingCheckin, setSendingCheckin] = useState(false);
+
+  // 1. Carrega os contatos dinâmicos associados ao usuário logado no SQLite
+  useEffect(() => {
+    async function fetchContatos() {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("http://localhost:3000/api/sos/contatos", {
+        method: "GET",
+        headers: {
+            "Authorization": `Bearer ${token}`
+        }
+});
+
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        setContactList(data.dados || data);
+      } catch (err) {
+        console.warn("Falha ao carregar contatos da API. Usando contingência.");
+        // Mock de contingência caso a tabela esteja limpa
+        setContactList([
+          { id: "c1", nome: "Mãe", telefone: "(81) 9 8888-7777" },
+          { id: "c2", nome: "João", telefone: "(81) 9 1234-6789" }
+        ]);
+      } finally {
+        setLoadingContacts(false);
+      }
+    }
+    fetchContatos();
+  }, []);
+
+  // 2. Captura a geolocalização e preenche o input dinamicamente
+  const handleUseCurrentLocation = () => {
+    if ("geolocation" in navigator) {
+      setDestination("Carregando localização...");
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setCoords({ lat: latitude, lng: longitude });
+          setDestination(`Minha Localização (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+        },
+        (error) => {
+          console.error(error);
+          setDestination("Não foi possível obter a localização.");
+        },
+        { enableHighAccuracy: true }
+      );
+    }
+  };
+
+  const toggleContact = (id: string) => {
+    setSelectedContacts((prev) =>
+      prev.includes(id) ? prev.filter((cId) => cId !== id) : [...prev, id]
+    );
+  };
+
+  // 3. Dispara o POST do Check-in para o Backend
+  const handleConfirmCheckIn = async () => {
+    try {
+      setSendingCheckin(true);
+      const token = localStorage.getItem("token");
+
+      const payload = {
+        destino: destination,
+        tempo_estimado: selectedTime,
+        contatos_notificados: selectedContacts,
+        latitude: coords.lat || null,
+        longitude: coords.lng || null
+      };
+
+      // Altere o endpoint de acordo com o nome da rota definida em seu server.js (/api/sos ou similar)
+        const response = await fetch("http://localhost:3000/api/sos", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+        });
+
+      if (!response.ok) throw new Error("Erro ao criar check-in");
+
+      // Passa as informações adiante para a tela ativa gerenciar o cronômetro
+      onConfirm({
+        destino: destination,
+        tempo: selectedTime,
+        contatos: selectedContacts,
+        ...coords
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Não foi possível salvar o seu Check-in no servidor.");
+    } finally {
+      setSendingCheckin(false);
+    }
+    localStorage.removeItem("checkin_segundos_restantes");
+  };
 
   const times = ["15 min", "30 min", "1 hora", "2 horas"];
-
-    // Alterna a seleção de contatos (permite selecionar múltiplos)
-    const toggleContact = (id: number) => {
-    setSelectedContacts((prev) =>
-        prev.includes(id) 
-        ? prev.filter((contactId) => contactId !== id) // Corrigido para contactId aqui
-        : [...prev, id]
-    );
-    };
-
-  const handleUseCurrentLocation = () => {
-    setDestination("Minha localização atual");
-  };
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col justify-between">
@@ -48,7 +134,7 @@ export default function CheckIn({ onBack, onConfirm, onEmergency }: CheckInProps
         </div>
         <p className="text-gray-400 mt-4">Avise seus contatos quando estiver a caminho de um local</p>
 
-        {/* Destino (Input Dinâmico) */}
+        {/* Destino */}
         <div className="bg-white border border-gray-100 rounded-3xl p-5 mt-5 mb-5 shadow-xs">
           <div className="flex items-center gap-2 mb-4">
             <MapPin size={18} className="text-purple-500" />
@@ -63,32 +149,36 @@ export default function CheckIn({ onBack, onConfirm, onEmergency }: CheckInProps
           />
           <button 
             onClick={handleUseCurrentLocation}
-            className="flex items-center gap-2 mt-4 text-sm text-gray-500 hover:text-purple-500 active:scale-95 transition-transform"
+            className="flex items-center gap-2 mt-4 text-sm text-indigo-500 font-semibold hover:text-purple-600 active:scale-95 transition-transform"
           >
             <Navigation size={16} /> Usar localização atual
           </button>
         </div>
 
-        {/* Contatos (Lista Dinâmica com cliques) */}
+        {/* Contatos Dinâmicos */}
         <div className="bg-white border border-gray-100 rounded-3xl p-5 mb-5 shadow-xs">
           <div className="flex items-center gap-2 mb-4">
             <Users size={18} className="text-purple-500" />
-            <span className="font-medium text-gray-700">Contatos</span>
+            <span className="font-medium text-gray-700">Contatos Vinculados</span>
           </div>
           <div className="space-y-3">
-            {contactList.map((contact) => (
-              <Contact
-                key={contact.id}
-                name={contact.name}
-                phone={contact.phone}
-                selected={selectedContacts.includes(contact.id)}
-                onClick={() => toggleContact(contact.id)}
-              />
-            ))}
+            {loadingContacts ? (
+              <p className="text-xs text-gray-400 animate-pulse">Sincronizando seus contatos...</p>
+            ) : (
+              contactList.map((contact) => (
+                <Contact
+                  key={contact.id}
+                  name={contact.nome}
+                  phone={contact.telefone}
+                  selected={selectedContacts.includes(contact.id)}
+                  onClick={() => toggleContact(contact.id)}
+                />
+              ))
+            )}
           </div>
         </div>
 
-        {/* Tempo (Grid Dinâmico com cliques) */}
+        {/* Tempo */}
         <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-xs">
           <div className="flex items-center gap-2 mb-4">
             <Clock3 size={18} className="text-purple-500" />
@@ -100,23 +190,22 @@ export default function CheckIn({ onBack, onConfirm, onEmergency }: CheckInProps
                 key={time}
                 text={time}
                 active={selectedTime === time}
-                onClick={() => setSelectedType(time)}
+                onClick={() => setSelectedTime(time)}
               />
             ))}
           </div>
         </div>
 
-        {/* Botão de Confirmação */}
+        {/* Botão de Confirmação Conectado */}
         <button 
-          onClick={onConfirm} 
-          disabled={!destination || selectedContacts.length === 0}
+          onClick={handleConfirmCheckIn} 
+          disabled={!destination || selectedContacts.length === 0 || sendingCheckin}
           className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-300 text-white py-4 rounded-xl font-medium mt-8 mb-8 active:scale-[0.99] transition-transform shadow-md shadow-indigo-100"
         >
-          Confirmar Check-in
+          {sendingCheckin ? "Processando Check-in..." : "Confirmar Check-in"}
         </button>
       </div>
 
-      {/* Rodapé Padrão */}
       <BottomTab 
         currentScreen="checkin"
         onMap={onBack} 
@@ -127,18 +216,7 @@ export default function CheckIn({ onBack, onConfirm, onEmergency }: CheckInProps
   );
 }
 
-// Componente Contact interno ajustado para interações
-function Contact({ 
-  name, 
-  phone, 
-  selected, 
-  onClick 
-}: { 
-  name: string; 
-  phone: string; 
-  selected: boolean; 
-  onClick: () => void; 
-}) {
+function Contact({ name, phone, selected, onClick }: { name: string; phone: string; selected: boolean; onClick: () => void }) {
   return (
     <div 
       onClick={onClick}
@@ -159,23 +237,12 @@ function Contact({
   );
 }
 
-// Componente TimeButton interno ajustado para cliques
-function TimeButton({ 
-  text, 
-  active, 
-  onClick 
-}: { 
-  text: string; 
-  active: boolean; 
-  onClick: () => void; 
-}) {
+function TimeButton({ text, active, onClick }: { text: string; active: boolean; onClick: () => void }) {
   return (
     <button 
       onClick={onClick}
       className={`rounded-xl py-3 border font-medium text-sm transition-all active:scale-95 ${
-        active
-          ? "border-purple-500 bg-purple-100 text-purple-700 shadow-xs"
-          : "bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200"
+        active ? "border-purple-500 bg-purple-100 text-purple-700 shadow-xs" : "bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200"
       }`}
     >
       {text}

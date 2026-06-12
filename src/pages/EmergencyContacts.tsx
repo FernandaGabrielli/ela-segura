@@ -1,16 +1,9 @@
-import { 
-  ArrowLeft, 
-  Phone, 
-  Trash2, 
-  User, 
-  Shield, 
-  Ambulance 
-} from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Phone, Trash2, User, Shield, Ambulance } from "lucide-react";
+import { useState, useEffect } from "react";
 import AddContactModal from "../components/AddContactModal"; 
 
 interface Contact {
-  id: number;
+  id: string; // Alterado para string para bater com o UUID do backend
   name: string;
   phone: string;
   initial: string;
@@ -22,28 +15,84 @@ interface EmergencyContactsProps {
 
 export default function EmergencyContacts({ onBack }: EmergencyContactsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // Lista de contatos inicializada como estado dinâmico
-  const [contacts, setContacts] = useState<Contact[]>([
-    { id: 1, name: "Mãe", phone: "(81) 9 xxxx-xxxx", initial: "M" },
-    { id: 2, name: "João", phone: "(81) 9 xxxx-xxxx", initial: "J" },
-  ]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Função para adicionar o novo contato vindo do modal
-  const handleAddContact = (newContact: { name: string; phone: string }) => {
-    const contactObj: Contact = {
-      id: Date.now(),
-      name: newContact.name,
-      phone: newContact.phone,
-      initial: newContact.name.charAt(0).toUpperCase(), // Pega a primeira letra
-    };
+  // 1. LISTAR: Busca os contatos reais no banco de dados
+  const loadContacts = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:3000/api/sos/contatos", {
+        method: "GET",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
 
-    setContacts((prev) => [...prev, contactObj]);
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      
+      // Formata os dados vindos do SQLite para o padrão do componente
+      const formatted = data.map((c: any) => ({
+        id: c.id,
+        name: c.nome,
+        phone: c.telefone,
+        initial: c.nome.charAt(0).toUpperCase()
+      }));
+      setContacts(formatted);
+    } catch (err) {
+      console.error("Erro ao carregar contatos:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Função para remover contatos da lista
-  const handleDeleteContact = (id: number) => {
-    setContacts((prev) => prev.filter((contact) => contact.id !== id));
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  // 2. CRIAR: Envia o contato criado no Modal direto para o banco de dados
+  const handleAddContact = async (newContact: { name: string; phone: string }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:3000/api/sos/contatos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          nome: newContact.name,
+          telefone: newContact.phone
+        })
+      });
+
+      if (!response.ok) throw new Error();
+      
+      // Recarrega a lista atualizada vinda do servidor
+      loadContacts();
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error("Erro ao adicionar contato:", err);
+      alert("Não foi possível salvar o contato.");
+    }
+  };
+
+  // 3. DELETAR: Remove do banco de dados usando o ID único
+  const handleDeleteContact = async (id: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`http://localhost:3000/api/sos/contatos/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error();
+      
+      // Remove do estado local para dar feedback imediato
+      setContacts((prev) => prev.filter((contact) => contact.id !== id));
+    } catch (err) {
+      console.error("Erro ao deletar contato:", err);
+      alert("Não foi possível remover o contato.");
+    }
   };
 
   return (
@@ -70,21 +119,9 @@ export default function EmergencyContacts({ onBack }: EmergencyContactsProps) {
           </h3>
           
           <div className="space-y-3">
-            <PublicServiceCard 
-              icon={<User size={20} className="text-pink-500" />} 
-              title="Central de Atendimento à Mulher" 
-              number="180" 
-            />
-            <PublicServiceCard 
-              icon={<Shield size={20} className="text-pink-500" />} 
-              title="Polícia Militar" 
-              number="190" 
-            />
-            <PublicServiceCard 
-              icon={<Ambulance size={20} className="text-pink-500" />} 
-              title="Samu" 
-              number="192" 
-            />
+            <PublicServiceCard icon={<User size={20} className="text-pink-500" />} title="Central de Atendimento à Mulher" number="180" />
+            <PublicServiceCard icon={<Shield size={20} className="text-pink-500" />} title="Polícia Militar" number="190" />
+            <PublicServiceCard icon={<Ambulance size={20} className="text-pink-500" />} title="Samu" number="192" />
           </div>
         </div>
 
@@ -103,8 +140,10 @@ export default function EmergencyContacts({ onBack }: EmergencyContactsProps) {
           </div>
 
           <div className="space-y-3">
-            {contacts.length === 0 ? (
-              <div className="text-center text-sm text-gray-400 py-4 bg-white border border-dashed rounded-2xl">
+            {loading ? (
+              <p className="text-center text-xs text-gray-400 py-4 animate-pulse">Sincronizando sua agenda segura...</p>
+            ) : contacts.length === 0 ? (
+              <div className="text-center text-sm text-gray-400 py-6 bg-white border border-dashed rounded-2xl">
                 Nenhum contato pessoal salvo.
               </div>
             ) : (
@@ -133,16 +172,7 @@ export default function EmergencyContacts({ onBack }: EmergencyContactsProps) {
   );
 }
 
-// Card para Serviços Públicos
-function PublicServiceCard({
-  icon,
-  title,
-  number,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  number: string;
-}) {
+function PublicServiceCard({ icon, title, number }: { icon: React.ReactNode; title: string; number: string }) {
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
       <div className="w-12 h-12 rounded-xl bg-pink-50 flex items-center justify-center shrink-0">
@@ -156,25 +186,13 @@ function PublicServiceCard({
   );
 }
 
-// Card para Contatos Pessoais (Modificado para aceitar telefone dinâmico e onDelete)
-function PersonalContactCard({
-  initial,
-  name,
-  phone,
-  onDelete,
-}: {
-  initial: string;
-  name: string;
-  phone: string;
-  onDelete: () => void;
-}) {
+function PersonalContactCard({ initial, name, phone, onDelete }: { initial: string; name: string; phone: string; onDelete: () => void }) {
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-4">
         <div className="w-12 h-12 rounded-xl bg-[#f3efff] text-[#5d5fef] flex items-center justify-center font-bold text-lg shrink-0">
           {initial}
         </div>
-        
         <div>
           <h4 className="font-semibold text-gray-700 text-sm">{name}</h4>
           <p className="text-xs text-gray-400 mt-0.5">{phone}</p>
@@ -182,14 +200,10 @@ function PersonalContactCard({
       </div>
 
       <div className="flex items-center gap-2">
-        <button className="w-9 h-9 rounded-full bg-[#f3efff] text-[#5d5fef] flex items-center justify-center active:scale-95 transition-transform">
+        <a href={`tel:${phone.replace(/\D/g, "")}`} className="w-9 h-9 rounded-full bg-[#f3efff] text-[#5d5fef] flex items-center justify-center active:scale-95 transition-transform">
           <Phone size={16} />
-        </button>
-
-        <button 
-          onClick={onDelete}
-          className="w-9 h-9 rounded-full bg-white text-red-500 flex items-center justify-center active:scale-95 transition-transform hover:bg-red-50"
-        >
+        </a>
+        <button onClick={onDelete} className="w-9 h-9 rounded-full bg-white text-red-500 flex items-center justify-center active:scale-95 transition-transform hover:bg-red-50">
           <Trash2 size={18} />
         </button>
       </div>

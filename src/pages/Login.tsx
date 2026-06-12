@@ -1,25 +1,37 @@
 import { useState } from "react";
-import {
-  ArrowLeft,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { auth } from "../services/api";
 
 interface LoginProps {
   onBack: () => void;
   onGoToRegister: () => void;
   onForgotPassword: () => void;
-  onLogin: () => void; // ADICIONE ISSO
+  onLogin: () => void;
 }
 
-export function Login({
-  onBack,
-  onGoToRegister,
-  onForgotPassword,
-  onLogin,
-}: LoginProps) {
-  const [showPassword, setShowPassword] =
-    useState(false);
+export function Login({ onBack, onGoToRegister, onForgotPassword, onLogin }: LoginProps) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [erro, setErro] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !senha) {
+      setErro("Preencha e-mail e senha.");
+      return;
+    }
+    setErro("");
+    setLoading(true);
+    try {
+      await auth.login(email, senha);
+      onLogin();
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : "Erro ao entrar.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="w-full h-screen bg-white px-5 py-6 flex flex-col">
@@ -37,12 +49,13 @@ export function Login({
       <div className="flex-1">
         <div className="mb-6">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Email ou CPF
+            Email
           </label>
-
           <input
-            type="text"
-            placeholder="Digite seu email ou CPF"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Digite seu email"
             className="w-full mt-2 border border-gray-200 bg-[#f7f7f7] rounded-lg px-4 py-4"
           />
         </div>
@@ -51,30 +64,24 @@ export function Login({
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Senha
           </label>
-
           <div className="relative mt-2">
             <input
               type={showPassword ? "text" : "password"}
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
               placeholder="Digite sua senha"
               className="w-full border border-gray-200 bg-[#f7f7f7] rounded-lg px-4 py-4"
             />
-
             <button
-              onClick={() =>
-                setShowPassword(!showPassword)
-              }
+              onClick={() => setShowPassword(!showPassword)}
               className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
             >
-              {showPassword ? (
-                <EyeOff size={20} />
-              ) : (
-                <Eye size={20} />
-              )}
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
           </div>
         </div>
 
-        <div className="flex justify-end mb-10">
+        <div className="flex justify-end mb-4">
           <button
             onClick={onForgotPassword}
             className="text-sm text-gray-500 hover:text-pink-500 font-medium"
@@ -82,21 +89,23 @@ export function Login({
             Esqueceu a senha?
           </button>
         </div>
+
+        {erro && (
+          <p className="text-sm text-red-500 mb-4 text-center">{erro}</p>
+        )}
       </div>
 
       <button
-        onClick={onLogin}
-        className="w-full bg-[#5d5fef] text-white py-4 rounded-xl font-bold text-lg mb-4"
+        onClick={handleLogin}
+        disabled={loading}
+        className="w-full bg-[#5d5fef] text-white py-4 rounded-xl font-bold text-lg mb-4 disabled:opacity-60"
       >
-        Entrar
+        {loading ? "Entrando..." : "Entrar"}
       </button>
 
       <p className="text-center text-sm text-gray-500 pb-4">
         Não possui conta?{" "}
-        <button
-          onClick={onGoToRegister}
-          className="text-pink-500 font-bold"
-        >
+        <button onClick={onGoToRegister} className="text-pink-500 font-bold">
           Cadastre-se
         </button>
       </p>
